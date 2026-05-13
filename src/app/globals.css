@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg-base: #080808;
+  --bg-surface: #0d0d0d;
+  --bg-surface-hover: #141414;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #525252;
+  --text-dim: #3a3a3a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #f5f5f5;
+  color: #0a0a0a;
+  font-weight: 700;
+  border-radius: 10px;
+  transition: all 0.18s ease;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.1);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  color: var(--text-muted);
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  background: transparent;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+/* Sidebar nav */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #525252;
+  background: transparent;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  font-weight: 400;
+}
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #a3a3a3;
+}
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f5f5f5;
+  font-weight: 600;
+}
+
+/* Contract rows */
+.contract-row {
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.contract-row:hover {
+  background: #141414 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Inputs */
+input:focus, textarea:focus, select:focus {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  outline: none;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, #a3a3a3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.07); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Skeleton pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
