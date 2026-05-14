@@ -6,18 +6,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 
 const industries = [
-  { value: '541512', label: 'IT Support & Help Desk' },
-  { value: '541519', label: 'Cybersecurity & IT Consulting' },
-  { value: '561720', label: 'Janitorial & Custodial' },
-  { value: '561730', label: 'Landscaping & Grounds' },
-  { value: '541330', label: 'Engineering Services' },
-  { value: '541611', label: 'Management Consulting' },
-  { value: '561410', label: 'Document & Admin Support' },
-  { value: '541930', label: 'Translation Services' },
-  { value: '236220', label: 'Construction & Renovation' },
-  { value: '722310', label: 'Food Service & Catering' },
-  { value: '621111', label: 'Healthcare Services' },
-  { value: '484110', label: 'Trucking & Freight' },
+  { value: '541512', label: 'IT Support & Help Desk', desc: 'Desktop support, service desk, IT staffing' },
+  { value: '541511', label: 'Software Development', desc: 'Web apps, mobile apps, custom software' },
+  { value: '541519', label: 'Cybersecurity & IT Consulting', desc: 'Security assessments, network consulting, cloud' },
+  { value: '561720', label: 'Janitorial & Custodial', desc: 'Cleaning, housekeeping, sanitation services' },
+  { value: '561730', label: 'Landscaping & Grounds', desc: 'Lawn care, grounds maintenance, snow removal' },
+  { value: '541330', label: 'Engineering Services', desc: 'Civil, mechanical, electrical engineering' },
+  { value: '541611', label: 'Management Consulting', desc: 'Program management, strategy, advisory' },
+  { value: '561320', label: 'Staffing & Recruiting', desc: 'Temp staffing, workforce solutions, HR support' },
+  { value: '561410', label: 'Document & Admin Support', desc: 'Data entry, document management, admin services' },
+  { value: '236220', label: 'Construction & Renovation', desc: 'Building construction, facility renovation' },
+  { value: '722310', label: 'Food Service & Catering', desc: 'Cafeteria management, catering, food service' },
+  { value: '621111', label: 'Healthcare & Medical', desc: 'Medical staffing, health services, clinical support' },
+  { value: '484110', label: 'Trucking & Freight', desc: 'Ground transportation, logistics, delivery' },
+  { value: '488510', label: 'Freight & Logistics', desc: 'Supply chain, warehousing, freight management' },
+  { value: '561612', label: 'Security Guards', desc: 'Physical security, guard services, access control' },
+  { value: '541211', label: 'Accounting & Finance', desc: 'Bookkeeping, auditing, financial consulting' },
+  { value: '611430', label: 'Training & Education', desc: 'Corporate training, e-learning, curriculum development' },
+  { value: '562910', label: 'Environmental Services', desc: 'Waste management, environmental remediation' },
+  { value: '323111', label: 'Printing & Graphics', desc: 'Commercial printing, graphic design, publications' },
+  { value: '561110', label: 'Facilities Management', desc: 'Building operations, maintenance, facility services' },
 ];
 
 const certifications = [
@@ -47,6 +55,9 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [industrySearch, setIndustrySearch] = useState('');
+  const [showManualNaics, setShowManualNaics] = useState(false);
+  const [manualNaics, setManualNaics] = useState('');
   const [form, setForm] = useState({
     businessName: '',
     location: '',
@@ -178,16 +189,82 @@ export default function Onboarding() {
                   <label style={{ fontSize: 12, fontWeight: 600, color: '#737373', display: 'block', marginBottom: 8 }}>
                     Primary industry / service type
                   </label>
-                  <select
-                    value={form.naics}
-                    onChange={e => setForm(f => ({ ...f, naics: e.target.value }))}
-                    style={{ ...inputStyle, appearance: 'none' }}
-                  >
-                    <option value="">Select your industry...</option>
-                    {industries.map(ind => (
-                      <option key={ind.value} value={ind.value}>{ind.label}</option>
-                    ))}
-                  </select>
+                  <input
+                    value={industrySearch}
+                    onChange={e => setIndustrySearch(e.target.value)}
+                    placeholder="Search your industry..."
+                    style={{ ...inputStyle, marginBottom: 10 }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                    {industries
+                      .filter(ind =>
+                        ind.label.toLowerCase().includes(industrySearch.toLowerCase()) ||
+                        ind.desc.toLowerCase().includes(industrySearch.toLowerCase())
+                      )
+                      .map(ind => {
+                        const active = form.naics === ind.value;
+                        return (
+                          <button
+                            key={ind.value}
+                            onClick={() => {
+                              setForm(f => ({ ...f, naics: ind.value }));
+                              setShowManualNaics(false);
+                              setManualNaics('');
+                            }}
+                            style={{
+                              padding: '10px 14px', borderRadius: 9, textAlign: 'left',
+                              background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+                              border: active ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.07)',
+                              cursor: 'pointer', transition: 'all 0.15s',
+                            }}
+                          >
+                            <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#f5f5f5' : '#a3a3a3', marginBottom: 2 }}>
+                              {ind.label}
+                            </div>
+                            <div style={{ fontSize: 11, color: active ? '#737373' : '#3a3a3a' }}>
+                              {ind.desc}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    {industries.filter(ind =>
+                      ind.label.toLowerCase().includes(industrySearch.toLowerCase()) ||
+                      ind.desc.toLowerCase().includes(industrySearch.toLowerCase())
+                    ).length === 0 && (
+                      <p style={{ fontSize: 12, color: '#3a3a3a', padding: '8px 14px' }}>No industries match your search.</p>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    {!showManualNaics ? (
+                      <button
+                        onClick={() => { setShowManualNaics(true); setForm(f => ({ ...f, naics: '' })); }}
+                        style={{ background: 'none', border: 'none', color: '#525252', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                      >
+                        Don&apos;t see your industry? Enter NAICS code manually
+                      </button>
+                    ) : (
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#737373', display: 'block', marginBottom: 6 }}>
+                          Enter NAICS code manually
+                        </label>
+                        <input
+                          value={manualNaics}
+                          onChange={e => {
+                            setManualNaics(e.target.value);
+                            setForm(f => ({ ...f, naics: e.target.value }));
+                          }}
+                          placeholder="e.g. 541690"
+                          style={inputStyle}
+                        />
+                        <button
+                          onClick={() => { setShowManualNaics(false); setManualNaics(''); setForm(f => ({ ...f, naics: '' })); }}
+                          style={{ background: 'none', border: 'none', color: '#525252', fontSize: 11, cursor: 'pointer', padding: '4px 0 0', textDecoration: 'underline' }}
+                        >
+                          Back to list
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,15 +133,53 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* Terms & Conditions checkbox */}
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              cursor: 'pointer', marginTop: 4,
+            }}>
+              <div style={{ position: 'relative', flexShrink: 0, marginTop: 1 }}>
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={e => setAgreedToTerms(e.target.checked)}
+                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                />
+                <div style={{
+                  width: 16, height: 16, borderRadius: 4,
+                  border: agreedToTerms ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.15)',
+                  background: agreedToTerms ? '#f5f5f5' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s ease', flexShrink: 0,
+                }}>
+                  {agreedToTerms && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="#0a0a0a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <span style={{ fontSize: 13, color: '#525252', lineHeight: 1.5 }}>
+                I agree to the{' '}
+                <Link href="/terms" target="_blank" style={{ color: '#a3a3a3', fontWeight: 500, textDecoration: 'underline', textDecorationColor: 'rgba(163,163,163,0.3)' }}>
+                  Terms of Service
+                </Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" style={{ color: '#a3a3a3', fontWeight: 500, textDecoration: 'underline', textDecorationColor: 'rgba(163,163,163,0.3)' }}>
+                  Privacy Policy
+                </Link>
+              </span>
+            </label>
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreedToTerms}
               style={{
                 marginTop: 6, padding: '13px', borderRadius: 10,
                 fontSize: 14, fontWeight: 700,
-                background: loading ? 'rgba(255,255,255,0.06)' : '#f5f5f5',
-                color: loading ? '#3a3a3a' : '#0a0a0a',
-                border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                background: (loading || !agreedToTerms) ? 'rgba(255,255,255,0.06)' : '#f5f5f5',
+                color: (loading || !agreedToTerms) ? '#3a3a3a' : '#0a0a0a',
+                border: 'none', cursor: (loading || !agreedToTerms) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
               }}
             >

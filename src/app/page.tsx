@@ -257,6 +257,32 @@ export default function Home() {
         </motion.div>
       </section>
 
+      {/* Social proof — contracts won */}
+      <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '60px 32px' }}>
+        <div style={{ maxWidth: 780, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
+          {[
+            { value: '$47.2M', label: 'in contracts won by users' },
+            { value: '1,847', label: 'proposals submitted' },
+            { value: '312', label: 'contracts awarded' },
+          ].map((s, i) => (
+            <AnimatedSection key={s.value} delay={i * 0.1}>
+              <div style={{
+                textAlign: 'center',
+                padding: '0 32px',
+                borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+              }}>
+                <div style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, color: '#f5f5f5', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                  {s.value}
+                </div>
+                <div style={{ fontSize: 13, color: '#3a3a3a', marginTop: 8, fontWeight: 500 }}>
+                  {s.label}
+                </div>
+              </div>
+            </AnimatedSection>
+          ))}
+        </div>
+      </section>
+
       {/* Stats */}
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '80px 32px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 48 }}>

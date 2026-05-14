@@ -70,7 +70,48 @@ function deriveAgencyShort(agency: string): string {
   return words[words.length - 1].slice(0, 4).toUpperCase();
 }
 
-function mapToContract(opp: Record<string, unknown>, naicsCode: string): Contract {
+function calculateMatchScore(
+  opp: Record<string, unknown>,
+  naicsCode: string,
+  searchKeywords: string,
+  postedDate: Date,
+): number {
+  // 1. NAICS match (40 pts)
+  const contractNaics = (opp.naicsCode as string) || '';
+  let naicsScore = 0;
+  if (contractNaics && naicsCode) {
+    if (contractNaics === naicsCode) {
+      naicsScore = 40;
+    } else if (contractNaics.slice(0, 4) === naicsCode.slice(0, 4)) {
+      naicsScore = 20;
+    }
+  }
+
+  // 2. Set-aside bonus (20 pts)
+  const setAside = (opp.typeOfSetAsideDescription as string) || (opp.typeOfSetAside as string) || 'Full & Open';
+  const setAsideScore = setAside !== 'Full & Open' ? 20 : 0;
+
+  // 3. Keyword relevance (25 pts)
+  let keywordScore = 0;
+  if (searchKeywords.trim()) {
+    const keywords = searchKeywords.toLowerCase().split(/\s+/).filter(Boolean);
+    const haystack = [
+      (opp.title as string) || '',
+      (opp.description as string) || '',
+    ].join(' ').toLowerCase();
+    const matched = keywords.filter(kw => haystack.includes(kw)).length;
+    keywordScore = Math.min(25, matched * 8);
+  }
+
+  // 4. Recency bonus (15 pts)
+  const daysSincePosted = Math.floor((Date.now() - postedDate.getTime()) / (1000 * 60 * 60 * 24));
+  const recencyScore = daysSincePosted <= 30 ? 15 : daysSincePosted <= 60 ? 8 : 0;
+
+  const total = naicsScore + setAsideScore + keywordScore + recencyScore;
+  return Math.max(40, Math.min(99, total));
+}
+
+function mapToContract(opp: Record<string, unknown>, naicsCode: string, searchKeywords = ''): Contract {
   const deadlineStr = (opp.responseDeadLine as string) || (opp.archiveDate as string);
   const deadline = deadlineStr ? new Date(deadlineStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const daysLeft = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
@@ -87,6 +128,9 @@ function mapToContract(opp: Record<string, unknown>, naicsCode: string): Contrac
   const award = opp.award as { amount?: number } | undefined;
   const baseValue = opp.baseAndAllOptionsValue as number | undefined;
 
+  const postedDate = new Date((opp.postedDate as string) || Date.now());
+  const match = calculateMatchScore(opp, naicsCode, searchKeywords, postedDate);
+
   return {
     id: (opp.noticeId as string) || (opp.solicitationNumber as string) || Math.random().toString(36).slice(2),
     title: (opp.title as string) || 'Untitled Opportunity',
@@ -95,7 +139,7 @@ function mapToContract(opp: Record<string, unknown>, naicsCode: string): Contrac
     value: formatValue(award?.amount || baseValue),
     deadline: deadline.toISOString(),
     daysLeft,
-    match: Math.min(99, Math.floor(Math.random() * 18 + 78)), // TODO: real matching
+    match,
     naics: (opp.naicsCode as string) || naicsCode,
     location,
     setAside: (opp.typeOfSetAsideDescription as string) || (opp.typeOfSetAside as string) || 'Full & Open',
@@ -138,7 +182,7 @@ export async function searchContractsByParams(params: SearchParams): Promise<Con
     if (!res.ok) throw new Error(`SAM.gov API error: ${res.status}`);
     const data = await res.json();
     const opps: Record<string, unknown>[] = data.opportunitiesData || [];
-    return opps.map((opp) => mapToContract(opp, p.naicsCode || ''));
+    return opps.map((opp) => mapToContract(opp, p.naicsCode || '', p.keywords || ''));
   }
 
   // Try with keywords first
@@ -161,7 +205,7 @@ export async function searchContractsByParams(params: SearchParams): Promise<Con
   }
 }
 
-export async function searchContracts(naicsCode: string, limit = 20): Promise<Contract[]> {
+export async function searchContracts(naicsCode: string, limit = 20, searchKeywords = ''): Promise<Contract[]> {
   const today = new Date();
   const sixtyDaysAgo = new Date(today);
   sixtyDaysAgo.setDate(today.getDate() - 180); // 180 days to catch more active opportunities
@@ -188,5 +232,5 @@ export async function searchContracts(naicsCode: string, limit = 20): Promise<Co
 
   const data = await res.json();
   const opps: Record<string, unknown>[] = data.opportunitiesData || [];
-  return opps.map((opp) => mapToContract(opp, naicsCode));
+  return opps.map((opp) => mapToContract(opp, naicsCode, searchKeywords));
 }

@@ -11,6 +11,18 @@ import type { ContractBreakdown } from '@/lib/claude';
 
 type AnyContract = typeof mockContracts[0] | Contract;
 
+interface ComplianceData {
+  pageLimit: string | null;
+  fontRequirements: string | null;
+  requiredCertifications: string[];
+  requiredRegistrations: string[];
+  bondingInsurance: string | null;
+  clearanceRequired: string | null;
+  deadlines: string[];
+  submissionFormat: string | null;
+  checklist: string[];
+}
+
 function AIBreakdown({ breakdown, loading }: { breakdown: ContractBreakdown | null; loading: boolean }) {
   if (loading) {
     return (
@@ -73,12 +85,68 @@ function AIBreakdown({ breakdown, loading }: { breakdown: ContractBreakdown | nu
   );
 }
 
+function CheckGroup({
+  title,
+  items,
+  prefix,
+  checkedItems,
+  toggleCheck,
+}: {
+  title: string;
+  items: string[];
+  prefix: string;
+  checkedItems: Record<string, boolean>;
+  toggleCheck: (key: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+        {title}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item, i) => {
+          const key = `${prefix}-${i}`;
+          const checked = !!checkedItems[key];
+          return (
+            <button
+              key={key}
+              onClick={() => toggleCheck(key)}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+                padding: '10px 14px', borderRadius: 9, textAlign: 'left',
+                background: checked ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.03)',
+                border: checked ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              <div style={{
+                width: 16, height: 16, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                background: checked ? '#22c55e' : 'transparent',
+                border: checked ? 'none' : '1px solid rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {checked && <span style={{ fontSize: 10, color: '#fff', fontWeight: 800 }}>✓</span>}
+              </div>
+              <span style={{ fontSize: 13, color: checked ? '#6ee7b7' : '#a3a3a3', lineHeight: 1.5, textDecoration: checked ? 'line-through' : 'none' }}>
+                {item}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ContractPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [contract, setContract] = useState<AnyContract | null>(null);
   const [breakdown, setBreakdown] = useState<ContractBreakdown | null>(null);
   const [loadingBreakdown, setLoadingBreakdown] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [compliance, setCompliance] = useState<ComplianceData | null>(null);
+  const [loadingCompliance, setLoadingCompliance] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // 1. Try sessionStorage (from dashboard fetch)
@@ -150,6 +218,35 @@ export default function ContractPage({ params }: { params: Promise<{ id: string 
 
     fetchBreakdown(found);
   }, [id]);
+
+  const generateCompliance = async () => {
+    if (!contract) return;
+    setLoadingCompliance(true);
+    try {
+      const res = await fetch('/api/compliance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractTitle: contract.title,
+          contractDescription: contract.description,
+          solicitationNumber: contract.solicitationNumber,
+        }),
+      });
+      if (res.ok) {
+        const data: ComplianceData = await res.json();
+        setCompliance(data);
+        setCheckedItems({});
+      }
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setLoadingCompliance(false);
+    }
+  };
+
+  const toggleCheck = (key: string) => {
+    setCheckedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   if (notFound) {
     return (
@@ -279,6 +376,132 @@ export default function ContractPage({ params }: { params: Promise<{ id: string 
             </div>
           </motion.div>
         </div>
+
+        {/* Compliance Checklist */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} style={{ marginTop: 24 }}>
+          <div style={{ padding: '28px', borderRadius: 16, background: '#141414', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f5f5f5', letterSpacing: '-0.01em' }}>Compliance Checklist</h2>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.07)', color: '#525252', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Powered by Claude
+                </span>
+              </div>
+              {!compliance && (
+                <button
+                  onClick={generateCompliance}
+                  disabled={loadingCompliance}
+                  style={{
+                    padding: '8px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                    background: loadingCompliance ? 'rgba(255,255,255,0.05)' : '#f5f5f5',
+                    color: loadingCompliance ? '#3a3a3a' : '#0a0a0a',
+                    border: 'none', cursor: loadingCompliance ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {loadingCompliance ? 'Generating...' : 'Generate Compliance Checklist'}
+                </button>
+              )}
+              {compliance && (
+                <button
+                  onClick={generateCompliance}
+                  disabled={loadingCompliance}
+                  style={{ background: 'none', border: 'none', color: '#525252', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Regenerate
+                </button>
+              )}
+            </div>
+
+            {!compliance && !loadingCompliance && (
+              <p style={{ fontSize: 13, color: '#3a3a3a' }}>Click the button to extract compliance requirements from this contract.</p>
+            )}
+
+            {loadingCompliance && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f5f5f5', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <span style={{ fontSize: 13, color: '#525252' }}>Analyzing compliance requirements...</span>
+                </div>
+                {[70, 55, 80, 60].map((w, i) => (
+                  <div key={i} style={{ height: 12, width: `${w}%`, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
+                ))}
+              </div>
+            )}
+
+            {compliance && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {/* Summary fields */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  {[
+                    { label: 'Submission Format', value: compliance.submissionFormat },
+                    { label: 'Security Clearance', value: compliance.clearanceRequired },
+                    { label: 'Bonding / Insurance', value: compliance.bondingInsurance },
+                    { label: 'Page Limit', value: compliance.pageLimit },
+                    { label: 'Font Requirements', value: compliance.fontRequirements },
+                  ].filter(item => item.value).map(item => (
+                    <div key={item.label} style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ fontSize: 10, color: '#3a3a3a', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                        {item.label}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#a3a3a3' }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Required certifications */}
+                {compliance.requiredCertifications.length > 0 && (
+                  <CheckGroup
+                    title="Required Certifications"
+                    items={compliance.requiredCertifications}
+                    prefix="cert"
+                    checkedItems={checkedItems}
+                    toggleCheck={toggleCheck}
+                  />
+                )}
+
+                {/* Required registrations */}
+                {compliance.requiredRegistrations.length > 0 && (
+                  <CheckGroup
+                    title="Required Registrations"
+                    items={compliance.requiredRegistrations}
+                    prefix="reg"
+                    checkedItems={checkedItems}
+                    toggleCheck={toggleCheck}
+                  />
+                )}
+
+                {/* Key deadlines */}
+                {compliance.deadlines.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                      Key Deadlines
+                    </div>
+                    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {compliance.deadlines.map((d, i) => (
+                        <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: '#a3a3a3' }}>
+                          <span style={{ color: '#f87171', fontWeight: 700, flexShrink: 0 }}>!</span>
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Action checklist */}
+                {compliance.checklist.length > 0 && (
+                  <CheckGroup
+                    title="Action Items"
+                    items={compliance.checklist}
+                    prefix="action"
+                    checkedItems={checkedItems}
+                    toggleCheck={toggleCheck}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
 
         {/* Bottom CTA */}
         <motion.div
