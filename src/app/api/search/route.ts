@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { searchContractsByParams, type Contract } from '@/lib/sam-api';
+import { searchContracts, type Contract } from '@/lib/sam-api';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Common NAICS codes for federal contracting
+// Local NAICS fallback if Claude is unavailable
 const NAICS_MAP: Record<string, string> = {
   'it': '541512', 'information technology': '541512', 'help desk': '541512', 'tech support': '541512',
   'software': '541511', 'web': '541511', 'app': '541511', 'development': '541511',
@@ -22,6 +22,23 @@ const NAICS_MAP: Record<string, string> = {
   'accounting': '541211', 'finance': '541211', 'audit': '541211',
   'legal': '541110', 'attorney': '541110',
   'engineering': '541330', 'architect': '541310',
+  'facilities': '561110', 'maintenance': '561110',
+  'security guard': '561612', 'guard': '561612',
+  'environmental': '562910', 'waste': '562111',
+  'printing': '323111', 'hardware': '334111',
+};
+
+// Related NAICS codes to try when primary returns no results
+const NAICS_SIBLINGS: Record<string, string[]> = {
+  '722310': ['722320', '722330', '722514'],
+  '541512': ['541511', '541519', '541513'],
+  '541519': ['541512', '541511', '541513'],
+  '561720': ['561710', '561730', '561790'],
+  '236220': ['236210', '237110', '238910'],
+  '561320': ['561310', '561330', '561110'],
+  '541611': ['541612', '541613', '541618'],
+  '488510': ['488190', '484110', '484121'],
+  '621111': ['621112', '621399', '621210'],
 };
 
 function guessNaics(query: string): string {
@@ -32,81 +49,111 @@ function guessNaics(query: string): string {
   return '';
 }
 
+async function searchWithFallbacks(naicsCode: string): Promise<{ contracts: Contract[]; usedNaics: string }> {
+  // Try primary NAICS
+  try {
+    const results = await searchContracts(naicsCode, 40);
+    if (results.length > 0) return { contracts: results, usedNaics: naicsCode };
+  } catch { /* try siblings */ }
+
+  // Try sibling NAICS codes
+  const siblings = NAICS_SIBLINGS[naicsCode] || [];
+  for (const sibling of siblings) {
+    try {
+      const results = await searchContracts(sibling, 40);
+      if (results.length > 0) return { contracts: results, usedNaics: sibling };
+    } catch { /* try next */ }
+  }
+
+  // Broaden to 4-digit prefix
+  const prefix = naicsCode.slice(0, 4);
+  for (const suffix of ['00', '10', '11', '12', '20', '30', '40']) {
+    const broad = prefix + suffix;
+    if (broad === naicsCode) continue;
+    try {
+      const results = await searchContracts(broad, 40);
+      if (results.length > 0) return { contracts: results, usedNaics: broad };
+    } catch { /* try next */ }
+  }
+
+  return { contracts: [], usedNaics: naicsCode };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { query, userProfile } = await req.json();
     if (!query) return NextResponse.json({ error: 'Missing query' }, { status: 400 });
 
-    // Step 1: Claude parses the query to extract NAICS + explanation
-    const systemPrompt = `You are a federal contracting search assistant. Parse the user's natural language query into SAM.gov search parameters.
+    // Step 1: Use Claude to extract NAICS code from natural language
+    const systemPrompt = `You are a federal contracting search assistant. Parse the user's query into SAM.gov search parameters.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown):
 {
-  "naicsCode": "best matching 6-digit NAICS code — always provide one if possible",
+  "naicsCode": "best matching 6-digit NAICS code — always provide one",
   "keywords": "2-4 core keywords from the query",
-  "setAside": "SBA | 8A | HZC | WOSB | SDVOSB | empty string",
-  "explanation": "one sentence: what you're searching for and why this NAICS code fits"
+  "explanation": "one sentence: what you're searching for and why this NAICS fits"
 }
 
-NAICS reference (use these exact codes):
-541512=IT/Computer Services, 541511=Software Dev, 541519=Cybersecurity/Network,
-561320=Staffing, 561720=Janitorial, 236220=Construction, 541611=Management Consulting,
-722310=Food/Catering, 561730=Landscaping, 611430=Training, 541330=Engineering,
-621111=Medical/Healthcare, 541211=Accounting, 488510=Logistics/Transportation,
-561110=Facilities Management, 334111=Computer Hardware, 511210=Software Publishing
+NAICS reference:
+541512=IT/Help Desk, 541511=Software Dev, 541519=Cybersecurity/Cloud/Network,
+561320=Staffing, 561720=Janitorial/Cleaning, 236220=Construction,
+541611=Management Consulting, 722310=Food/Catering, 561730=Landscaping,
+611430=Training, 541330=Engineering, 621111=Medical/Healthcare,
+541211=Accounting/Finance, 488510=Logistics, 561110=Facilities Management,
+334111=Computer Hardware, 561612=Security Guards, 562910=Environmental
 
 User profile: ${userProfile ? `NAICS ${userProfile.naics || 'unknown'}, ${userProfile.business_name || ''}` : 'not provided'}`;
 
     let naicsCode = '';
     let keywords = query;
-    let setAside = '';
     let explanation = `Searching for: ${query}`;
 
     try {
       const message = await client.messages.create({
         model: 'claude-haiku-4-5',
-        max_tokens: 250,
+        max_tokens: 200,
         messages: [{ role: 'user', content: query }],
         system: systemPrompt,
       });
-
       const text = (message.content[0] as { text: string }).text;
-      const cleaned = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
       naicsCode = parsed.naicsCode || '';
       keywords = parsed.keywords || query;
-      setAside = parsed.setAside || '';
       explanation = parsed.explanation || explanation;
-    } catch { /* use local fallback */ }
+    } catch { /* fall through to local guess */ }
 
-    // Fallback: guess NAICS from query locally if Claude didn't provide one
     if (!naicsCode) naicsCode = guessNaics(query);
 
-    // Step 2: Search SAM.gov with all extracted params
-    let contracts: Contract[] = [];
-    let usedNaics = naicsCode;
-
-    try {
-      contracts = await searchContractsByParams({ keywords, naicsCode, setAside, limit: 40 });
-    } catch {
-      // Broaden NAICS to 4-digit prefix and retry
-      if (naicsCode) {
-        usedNaics = naicsCode.slice(0, 4) + '00';
-        try {
-          contracts = await searchContractsByParams({ keywords, naicsCode: usedNaics, setAside, limit: 40 });
-        } catch { /* no results */ }
-      }
+    if (!naicsCode) {
+      return NextResponse.json({
+        contracts: [],
+        explanation: `Couldn't identify a contract category for "${query}". Try: "IT help desk", "janitorial services", "construction", "staffing", "catering".`,
+        searchedFor: { keywords, naics: '', setAside: '' },
+      });
     }
 
-    // Limit to 20 results
+    // Step 2: Search SAM.gov by NAICS only (keyword search requires paid API key)
+    const { contracts: raw, usedNaics } = await searchWithFallbacks(naicsCode);
+
+    // Step 3: Filter client-side by keywords
+    let contracts = raw;
+    if (contracts.length > 0 && keywords) {
+      const kwds = keywords.toLowerCase().split(/\s+/).filter((k: string) => k.length > 2);
+      const filtered = contracts.filter(c => {
+        const text = `${c.title} ${c.agency} ${c.description}`.toLowerCase();
+        return kwds.some((k: string) => text.includes(k));
+      });
+      if (filtered.length > 0) contracts = filtered;
+    }
+
     contracts = contracts.slice(0, 20);
 
     return NextResponse.json({
       contracts,
-      explanation: naicsCode
+      explanation: contracts.length > 0
         ? `${explanation} (NAICS ${usedNaics})`
-        : `${explanation} — no matching NAICS code found, try being more specific.`,
-      searchedFor: { keywords, naics: usedNaics, setAside },
+        : `${explanation} (NAICS ${usedNaics}) — no active contracts right now. SAM.gov updates daily, check back tomorrow or try broader keywords.`,
+      searchedFor: { keywords, naics: usedNaics, setAside: '' },
     });
 
   } catch (err) {

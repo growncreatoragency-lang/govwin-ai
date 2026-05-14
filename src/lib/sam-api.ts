@@ -164,7 +164,7 @@ export async function searchContractsByParams(params: SearchParams): Promise<Con
 export async function searchContracts(naicsCode: string, limit = 20): Promise<Contract[]> {
   const today = new Date();
   const sixtyDaysAgo = new Date(today);
-  sixtyDaysAgo.setDate(today.getDate() - 60);
+  sixtyDaysAgo.setDate(today.getDate() - 180); // 180 days to catch more active opportunities
 
   const params = new URLSearchParams({
     naicsCode,
